@@ -1,0 +1,48 @@
+const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
+const { exec } = require('child_process');
+const app = express();
+const db = new sqlite3.Database('db.sqlite');
+
+app.use(express.json());
+app.use(express.static('/var/www/html'));
+
+// لاگین
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body;
+  db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
+    if (err || !row || !bcrypt.compareSync(password, row.password)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    res.json({ id: row.id, username: row.username });
+  });
+});
+
+// اضافه کردن کاربر
+app.post('/api/users', (req, res) => {
+  const { username, password, data_limit, expiry_date } = req.body;
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  db.run(
+    'INSERT INTO users (username, password, data_limit, expiry_date) VALUES (?, ?, ?, ?)',
+    [username, hashedPassword, data_limit, expiry_date],
+    (err) => {
+      if (err) return res.status(500).json({ error: 'Failed to add user' });
+      // ایجاد کانفیگ OpenVPN
+      exec(`bash /opt/vpn-panel/create_openvpn_user.sh ${username}`, (err) => {
+        if (err\`Failed to create OpenVPN config' });
+        res.json({ success: true });
+      });
+    }
+  );
+});
+
+// لیست سرورها
+app.get('/api/servers', (req, res) => {
+  db.all('SELECT * FROM servers', (err, rows) => {
+    if (err) return res.status(500).json({ error: 'Failed to fetch servers' });
+    res.json(rows);
+  });
+});
+
+app.listen(3000, () => console.log('Server running on port 3000'));

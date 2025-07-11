@@ -1,0 +1,18 @@
+#!/bin/bash
+
+USERNAME=$1
+OPENVPN_DIR="/etc/openvpn/server"
+
+# ایجاد کاربر جدید در OpenVPN
+echo "Creating OpenVPN user: $USERNAME"
+cd $OPENVPN_DIR
+./easyrsa build-client-full $USERNAME nopass
+cp pki/issued/$USERNAME.crt pki/private/$USERNAME.key pki/ca.crt pki/ta.key /etc/openvpn/client/
+cat <<EOT > /etc/openvpn/client/$USERNAME.ovpn
+client
+dev tun
+proto udp
+remote your-server-ip 1194
+resolv-retry infinite
+nobind
+persist

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyVPN Panel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-2xl">
+    <h1 class="text-2xl font-bold text-center mb-4">MyVPN Panel</h1>
+    <div id="userInfo" class="mb-4"></div>
+    <div id="serverList" class="mb-4"></div>
+    <div class="mb-4">
+      <h2 class="text-lg font-bold">Add User</h2>
+      <input id="username" type="text" placeholder="Username" class="border p-2 w-full mb-2">
+      <input id="password" type="password" placeholder="Password" class="border p-2 w-full mb-2">
+      <input id="data_limit" type="number" placeholder="Data Limit (GB)" class="border p-2 w-full mb-2">
+      <input id="expiry_date" type="date" class="border p-2 w-full mb-2">
+      <button onclick="addUser()" class="bg-blue-500 text-white py-2 px-4 rounded">Add User</button>
+    </div>
+  </div>
+
+  <script>
+    async function fetchServers() {
+      const res = await fetch('/api/servers');
+      const servers = await res.json();
+      document.getElementById('serverList').innerHTML = servers.map(s => `
+        <div class="p-2">${s.name} (${s.protocol}): ${s.ip}</div>
+      `).join('');
+    }
+
+    async function addUser() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const data_limit = document.getElementById('data_limit').value;
+      const expiry_date = document.getElementById('expiry_date').value;
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, data_limit, expiry_date })
+      });
+      alert((await res.json()).success ? 'User added!' : 'Failed to add user');
+    }
+
+    // لود اطلاعات کاربر و سرورها
+    fetchServers();
+    document.getElementById('userInfo').innerHTML = 'Logged in as Admin';
+  </script>
+</body>
+</html>

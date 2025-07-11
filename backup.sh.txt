@@ -1,0 +1,18 @@
+#!/bin/bash
+
+BACKUP_DIR="/opt/vpn-panel/backup"
+REMOTE_SERVER="user@new-server:/path/to/restore"
+
+# ایجاد پوشه بکاپ
+mkdir -p $BACKUP_DIR
+
+# بکاپ دیتابیس
+sqlite3 /opt/vpn-panel/backend/db.sqlite .dump > $BACKUP_DIR/db_backup.sql
+
+# بکاپ فایل‌های کانفیگ
+tar -czf $BACKUP_DIR/configs_backup.tar.gz /etc/openvpn /etc/wireguard
+
+# انتقال به سرور جدید
+scp $BACKUP_DIR/* $REMOTE_SERVER
+
+echo "Backup and transfer completed!"

@@ -1,0 +1,73 @@
+#!/bin/bash
+
+# اسکریپت نصب خودکار پنل VPN
+# پیش‌نیازها: Ubuntu 20.04/22.04
+
+echo "Starting VPN Panel Installation..."
+
+# آپدیت سیستم
+sudo apt update && sudo apt upgrade -y
+
+# نصب پیش‌نیازها
+sudo apt install -y curl wget git nodejs npm sqlite3
+
+# نصب OpenVPN (با اسکریپت Nyr اصلاح‌شده)
+wget https://raw.githubusercontent.com/Nyr/openvpn-install/master/openvpn-install.sh -O openvpn-install.sh
+chmod +x openvpn-install.sh
+sed -i 's/# Additional configurations/echo "push \"redirect-gateway def1 bypass-dhcp\"" >> \/etc\/openvpn\/server\/server.conf/' openvpn-install.sh
+sudo bash openvpn-install.sh
+
+# نصب WireGuard
+sudo apt install -y wireguard
+wg genkey | tee /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
+cat <<EOT > /etc/wireguard/wg0.conf
+[Interface]
+PrivateKey = $(cat /etc/wireguard/privatekey)
+Address = 10.0.0.1/24
+ListenPort = 51820
+PostUp = iptables -A FORWARD -i wg0 -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+
+[Peer]
+# نمونه کاربر (بعداً از پنل اضافه می‌شه)
+PublicKey = PLACEHOLDER
+AllowedIPs = 10.0.0.2/32
+EOT
+sudo systemctl enable wg-quick@wg0
+sudo systemctl start wg-quick@wg0
+
+# نصب Node.js و وابستگی‌ها
+cd /opt
+git clone https://github.com/your-username/vpn-panel.git
+cd vpn-panel/backend
+npm install express sqlite3 bcrypt
+
+# راه‌اندازی دیتابیس SQLite
+sqlite3 db.sqlite "CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, password TEXT, data_limit REAL, expiry_date TEXT);"
+sqlite3 db.sqlite "CREATE TABLE servers (id INTEGER PRIMARY KEY, name TEXT, ip TEXT, protocol TEXT, config_path TEXT);"
+sqlite3 db.sqlite "INSERT INTO servers (name, ip, protocol, config_path) VALUES ('Server 1', 'your-server-ip', 'openvpn', '/etc/openvpn/server/client.ovpn');"
+sqlite3 db.sqlite "INSERT INTO servers (name, ip, protocol, config_path) VALUES ('Server 2', 'your-server-ip', 'wireguard', '/etc/wireguard/wg0.conf');"
+
+# راه‌اندازی سرور Node.js
+node server.js &
+
+# نصب Nginx برای رابط کاربری
+sudo apt install -y nginx
+sudo cp -r ../frontend/* /var/www/html/
+sudo systemctl restart nginx
+
+# اسکریپت بکاپ
+cat <<EOT > /opt/vpn-panel/backup.sh
+#!/bin/bash
+BACKUP_DIR="/opt/vpn-panel/backup"
+mkdir -p \$BACKUP_DIR
+sqlite3 /opt/vpn-panel/backend/db.sqlite .dump > \$BACKUP_DIR/db_backup.sql
+tar -czf \$BACKUP_DIR/configs_backup.tar.gz /etc/openvpn /etc/wireguard
+echo "Backup created at \$BACKUP_DIR"
+# برای انتقال به سرور جدید:
+# scp \$BACKUP_DIR/* user@new-server:/path/to/restore
+EOT
+chmod +x /opt/vpn-panel/backup.sh
+
+echo "Installation completed! Access panel at http://your-server-ip"
+echo "Default admin: username=admin, password=admin123 (change it!)"
